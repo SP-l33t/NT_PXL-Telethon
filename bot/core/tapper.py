@@ -138,7 +138,7 @@ class Tapper:
 
         return auth_token
 
-    async def check_proxy(self, http_client: aiohttp.ClientSession) -> bool:
+    async def check_proxy(self, http_client: CloudflareScraper) -> bool:
         proxy_conn = http_client.connector
         if proxy_conn and not hasattr(proxy_conn, '_proxy_host'):
             logger.info(self.log_message(f"Running Proxy-less"))
@@ -190,7 +190,7 @@ class Tapper:
         except Exception as error:
             log_error(self.log_message(f"Unknown error when joining squad: {error}"))
 
-    async def login(self, http_client: aiohttp.ClientSession):
+    async def login(self, http_client: CloudflareScraper):
         try:
 
             response = await http_client.get(f"{API_GAME_ENDPOINT}/users/me")
@@ -238,7 +238,7 @@ class Tapper:
 
             await asyncio.sleep(15)
 
-    async def get_balance(self, http_client: aiohttp.ClientSession):
+    async def get_balance(self, http_client: CloudflareScraper):
         try:
             balance_req = await http_client.get(f'{API_GAME_ENDPOINT}/mining/status')
             balance_req.raise_for_status()
@@ -248,7 +248,7 @@ class Tapper:
             log_error(self.log_message(f"Unknown error when processing balance: {error}"))
             await asyncio.sleep(delay=3)
 
-    async def tasks(self, http_client: aiohttp.ClientSession):
+    async def tasks(self, http_client: CloudflareScraper):
         try:
             stats = await http_client.get(f'{API_GAME_ENDPOINT}/mining/status')
             stats.raise_for_status()
@@ -312,7 +312,7 @@ class Tapper:
         except Exception as error:
             log_error(self.log_message(f"Unknown error when processing tasks: {error}"))
 
-    async def make_paint_request(self, http_client: aiohttp.ClientSession, yx, color, delay_start, delay_end):
+    async def make_paint_request(self, http_client: CloudflareScraper, yx, color, delay_start, delay_end):
         paint_request = await http_client.post(f'{API_GAME_ENDPOINT}/repaint/start',
                                                json={"pixelId": int(yx), "newColor": color})
         paint_request.raise_for_status()
@@ -323,7 +323,7 @@ class Tapper:
         logger.success(self.log_message(f"Painted {yx} with color: {color} | got <e>{change}</e> points"))
         await asyncio.sleep(delay=randint(delay_start, delay_end))
 
-    async def paint(self, http_client: aiohttp.ClientSession, retries=20):
+    async def paint(self, http_client: CloudflareScraper, retries=20):
         try:
             stats = await http_client.get(f'{API_GAME_ENDPOINT}/mining/status')
             stats.raise_for_status()
@@ -332,7 +332,7 @@ class Tapper:
             self.balance = stats_json.get('userBalance', 0)
             max_charges = stats_json.get('maxCharges', 24)
             logger.info(self.log_message(f"Charges: <e>{charges}/{max_charges}</e>"))
-            if await self.has_template(http_client=http_client):
+            if await self.notpx_template(http_client=http_client):
                 for _ in range(charges):
                     try:
                         q = await get_cords_and_color(user_id=self.user_id, template=self.template_to_join)
@@ -355,7 +355,7 @@ class Tapper:
             if retries > 0:
                 await self.paint(http_client=http_client, retries=retries - 1)
 
-    async def upgrade(self, http_client: aiohttp.ClientSession):
+    async def upgrade(self, http_client: CloudflareScraper):
         try:
             status_req = await http_client.get(f'{API_GAME_ENDPOINT}/mining/status')
             status_req.raise_for_status()
@@ -382,7 +382,7 @@ class Tapper:
             log_error(self.log_message(f"Unknown error when upgrading: {error}"))
             await asyncio.sleep(delay=3)
 
-    async def claim(self, http_client: aiohttp.ClientSession):
+    async def claim(self, http_client: CloudflareScraper):
         try:
             logger.info(self.log_message(f"Claiming mine"))
             response = await http_client.get(f'{API_GAME_ENDPOINT}/mining/status')
@@ -405,7 +405,7 @@ class Tapper:
             log_error(self.log_message(f"Unknown error when claiming reward: {error}"))
             await asyncio.sleep(delay=3)
 
-    async def in_squad(self, http_client: aiohttp.ClientSession):
+    async def in_squad(self, http_client: CloudflareScraper):
         try:
             logger.info(self.log_message(f"Checking if you're in squad"))
             stats_req = await http_client.get(f'{API_GAME_ENDPOINT}/mining/status')
@@ -422,17 +422,16 @@ class Tapper:
             await asyncio.sleep(delay=3)
             return True
 
-    async def notpx_template(self, http_client: aiohttp.ClientSession):
+    async def notpx_template(self, http_client: CloudflareScraper):
         try:
             stats_req = await http_client.get(f'{API_GAME_ENDPOINT}/image/template/my')
             stats_req.raise_for_status()
             cur_template = await stats_req.json()
-            cur_template = cur_template["id"]
-            return cur_template
+            return cur_template.get("id")
         except Exception as error:
             return 0
 
-    async def join_template(self, http_client: aiohttp.ClientSession):
+    async def need_join_template(self, http_client: CloudflareScraper):
         try:
             tmpl = await self.notpx_template(http_client)
             self.template_to_join = await template_to_join(tmpl)
@@ -441,7 +440,7 @@ class Tapper:
             pass
         return False
 
-    async def join_template(self, http_client: aiohttp.ClientSession, template_id):
+    async def join_template(self, http_client: CloudflareScraper, template_id):
         try:
             resp = await http_client.put(f"{API_GAME_ENDPOINT}/image/template/subscribe/{template_id}")
             resp.raise_for_status()
@@ -450,7 +449,6 @@ class Tapper:
         except Exception as error:
             log_error(self.log_message(f"Unknown error upon joining a template: {error}"))
             return False
-
 
     @staticmethod
     def generate_random_string(length=8):
@@ -515,15 +513,15 @@ class Tapper:
 
                     await inform(self.user_id, balance)
 
-                    joined = await self.has_template(http_client=http_client)
-                    if not joined:
-                        result = await self.join_template(http_client, "799818229")
+                    joined = await self.need_join_template(http_client=http_client)
+                    if joined:
+                        result = await self.join_template(http_client, self.template_to_join)
                         if result:
                             logger.success(self.log_message("Successfully joined template"))
                         while not joined:
                             if not result:
                                 result = await self.join_template(http_client, "799818229")
-                            joined = await self.has_template(http_client=http_client)
+                            joined = await self.need_join_template(http_client=http_client)
                             delay = uniform(5, 10)
                             await asyncio.sleep(delay=delay)
 
