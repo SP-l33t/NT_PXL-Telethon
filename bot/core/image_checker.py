@@ -10,7 +10,9 @@ from io import BytesIO
 def rgb_to_hex(rgb_color):
     return '#{:02X}{:02X}{:02X}'.format(rgb_color[0], rgb_color[1], rgb_color[2])
 
+
 field = None
+
 
 async def get_field_prepared():
     global field
@@ -19,9 +21,10 @@ async def get_field_prepared():
         with open('bot/points3x/template_data.json', 'r') as file:
             squares = json.load(file)
 
-        field =[{"coord": it["coord"], "color": it["color"]} for it in squares]
+        field = [{"coord": it["coord"], "color": it["color"]} for it in squares]
 
     return field
+
 
 # Function to fetch an image
 async def fetch_image(url):
@@ -90,7 +93,6 @@ async def get_cords_and_color():
     image_bytes = await fetch_image(image_url)
 
     if image_bytes is not None:
-
         await get_field_prepared()
 
         # Check if any pixels do not match their expected colors

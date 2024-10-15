@@ -12,6 +12,7 @@ def load_session_names():
 
     return [line.strip() for line in lines_list]
 
+
 async def append_line_to_file(line):
     async with aiofiles.open(settings.IN_USE_SESSIONS_PATH, 'a') as file:
         await file.write(line + '\n')
