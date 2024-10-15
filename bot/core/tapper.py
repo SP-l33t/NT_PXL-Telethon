@@ -18,7 +18,7 @@ from bot.config import settings
 from bot.utils import logger, log_error, proxy_utils, config_utils, AsyncInterProcessLock, CONFIG_PATH
 from bot.exceptions import InvalidSession
 from .headers import headers, headers_squads, get_sec_ch_ua
-from bot.core.image_checker import get_cords_and_color
+from bot.core.image_checker import get_cords_and_color, template_to_join, inform
 from bot.utils.firstrun import append_line_to_file
 
 API_SQUADS_ENDPOINT = "https://api.notcoin.tg"
@@ -50,6 +50,8 @@ class Tapper:
             self.tg_client.set_proxy(proxy_dict)
 
         self.balance = 0
+        self.template_to_join = 0
+        self.user_id = 0
 
         self._webview_data = None
 
@@ -333,11 +335,11 @@ class Tapper:
             if await self.has_template(http_client=http_client):
                 for _ in range(charges):
                     try:
-                        q = await get_cords_and_color()
+                        q = await get_cords_and_color(user_id=self.user_id, template=self.template_to_join)
                     except Exception:
-                        logger.success(self.log_message(f"All pixels painted, well done soldier;)"))
+                        logger.success(self.log_message(f"No pixels to paint"))
                         return
-                    coords = q["coord"]
+                    coords = q["coords"]
                     color3x = q["color"]
                     yx = coords
                     await self.make_paint_request(http_client, yx, color3x, 5, 10)
@@ -420,13 +422,24 @@ class Tapper:
             await asyncio.sleep(delay=3)
             return True
 
-    async def has_template(self, http_client: aiohttp.ClientSession):
+    async def notpx_template(self, http_client: aiohttp.ClientSession):
         try:
             stats_req = await http_client.get(f'{API_GAME_ENDPOINT}/image/template/my')
             stats_req.raise_for_status()
+            cur_template = await stats_req.json()
+            cur_template = cur_template["id"]
+            return cur_template
         except Exception as error:
-            return False
-        return True
+            return 0
+
+    async def join_template(self, http_client: aiohttp.ClientSession):
+        try:
+            tmpl = await self.notpx_template(http_client)
+            self.template_to_join = await template_to_join(tmpl)
+            return str(tmpl) != self.template_to_join
+        except Exception as error:
+            pass
+        return False
 
     async def join_template(self, http_client: aiohttp.ClientSession, template_id):
         try:
@@ -499,6 +512,8 @@ class Tapper:
 
                     balance = await self.get_balance(http_client)
                     logger.info(self.log_message(f"Balance: <e>{balance}</e>"))
+
+                    await inform(self.user_id, balance)
 
                     joined = await self.has_template(http_client=http_client)
                     if not joined:

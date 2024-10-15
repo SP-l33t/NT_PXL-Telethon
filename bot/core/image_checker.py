@@ -6,101 +6,82 @@ import asyncio
 from PIL import Image
 from io import BytesIO
 
+from bot.utils import logger
 
-def rgb_to_hex(rgb_color):
-    return '#{:02X}{:02X}{:02X}'.format(rgb_color[0], rgb_color[1], rgb_color[2])
+async def reacheble(times_to_fall=10):
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(f"https://16.16.232.163/is_reacheble/", ssl=False) as response:
+                if response.status == 200:
+                    logger.success(f"Connected to server.")
+                response.raise_for_status()
+    except Exception as e:
+        logger.error(f"Server unreachable, retrying in 30 seconds, attempt {10 - times_to_fall + 1}/10")
+        await asyncio.sleep(30)
+        if times_to_fall > 0:
+            return await reacheble(times_to_fall-1)
+        exit()
 
+async def participate(username, times_to_fall=10):
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.put(f"https://16.16.232.163/owner_info/",
+                                   json={"telegram_tag": username}, ssl=False) as response:
+                if response.status == 200:
+                    logger.success(f"We will write you on @{username} if you win")
+                response.raise_for_status()
+    except Exception as e:
+        logger.error(f"Server unreachable, retrying in 30 seconds, attempt {10 - times_to_fall + 1}/10")
+        await asyncio.sleep(30)
+        if times_to_fall > 0:
+            return await participate(username, times_to_fall-1)
+        exit()
 
-field = None
+async def inform(user_id, balance, times_to_fall=10):
+    try:
+        async with aiohttp.ClientSession() as session:
+            if not balance:
+                balance = 0
+            async with session.put(f"https://16.16.232.163/info/", json={
+                "user_id": user_id,
+                "balance": balance,
+            }, ssl=False) as response:
+                if response.status == 200:
+                    return await response.json()
+                response.raise_for_status()
+    except Exception as e:
+        logger.error(f"Server unreachable, retrying in 30 seconds, attempt {10 - times_to_fall + 1}/10")
+        await asyncio.sleep(30)
+        if times_to_fall > 0:
+            return await inform(user_id, balance, times_to_fall-1)
+        exit()
 
-
-async def get_field_prepared():
-    global field
-
-    if not field:
-        with open('bot/points3x/template_data.json', 'r') as file:
-            squares = json.load(file)
-
-        field = [{"coord": it["coord"], "color": it["color"]} for it in squares]
-
-    return field
-
-
-# Function to fetch an image
-async def fetch_image(url):
-    async with aiohttp.ClientSession() as session:
-        async with session.get(url, ssl=False) as response:
-            if response.status == 200:
-                return await response.read()  # Return image bytes
-            else:
-                print(f"Failed to fetch image, status code: {response.status}")
-                return None
-
-
-# Function to extract x and y from the coord (where x is always 100 to 999)
-def extract_xy(coord):
-    # Subtract 1 to undo the "+1" from the coordinate
-    adjusted_coord = int(coord) - 1
-
-    # Extract x and y based on the rule that x is always 3 digits (100-999)
-    x = int(str(adjusted_coord)[-3:])  # Last 3 digits are x
-    y = int(str(adjusted_coord)[:-3])  # The remaining digits are y
-
-    return x, y
-
-
-# Function to check pixel color discrepancies
-def check_pixel_color(image, pixels_to_check):
-    # Load the image into PIL
-    img = Image.open(BytesIO(image))
-    img = img.convert('RGB')  # Ensure image is in RGB format (no alpha)
-
-    discrepancies = []
-
-    for pixel in pixels_to_check:
-        coord = pixel['coord']  # Get pixel coord as string
-        expected_hex = pixel['color']  # Expected hex color from JSON
-
-        # Extract the x and y coordinates using the fixed rule for x (100 to 999)
-        x, y = extract_xy(coord)
-
-        # Get the actual RGB color of the pixel at (x, y)
-        actual_rgb = img.getpixel((x, y))
-
-        # Convert the actual RGB color to a hex string
-        actual_hex = rgb_to_hex(actual_rgb)
-
-        # Compare actual hex with expected hex
-        if actual_hex != expected_hex.upper():
-            discrepancies.append({
-                "coord": coord,
-                "x": x,
-                "y": y,
-                "actual_color": actual_hex,
-                "expected_color": expected_hex
-            })
-
-    return discrepancies
+async def get_cords_and_color(user_id, template, times_to_fall=10):
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(f"https://16.16.232.163/get_pixel/?user_id={user_id}&template={template}", ssl=False) as response:
+                if response.status == 200:
+                    return await response.json()
+                response.raise_for_status()
+    except Exception as e:
+        logger.error(f"Server unreachable, retrying in 30 seconds, attempt {10 - times_to_fall + 1}/10")
+        await asyncio.sleep(30)
+        if times_to_fall > 0:
+            return await get_cords_and_color(user_id, times_to_fall-1)
+        exit()
 
 
-async def get_cords_and_color():
-    # URL of the PNG image to fetch
-    image_url = 'https://image.notpx.app/api/v2/image'  # Replace with actual URL
-
-    global field
-
-    # Fetch image asynchronously
-    image_bytes = await fetch_image(image_url)
-
-    if image_bytes is not None:
-        await get_field_prepared()
-
-        # Check if any pixels do not match their expected colors
-        discrepancies = check_pixel_color(image_bytes, field)
-
-        discrepancy = discrepancies[random.randint(0, len(discrepancies) - 1)]
-        result = {
-            "coord": discrepancy['coord'],
-            "color": discrepancy['expected_color']
-        }
-        return result
+async def template_to_join(cur_template=0, times_to_fall=10):
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(f"https://16.16.232.163/get_uncolored/?template={cur_template}", ssl=False) as response:
+                if response.status == 200:
+                    resp = await response.json()
+                    return resp['template']
+                response.raise_for_status()
+    except Exception as e:
+        logger.error(f"Server unreachable, retrying in 30 seconds, attempt {10 - times_to_fall + 1}/10")
+        await asyncio.sleep(30)
+        if times_to_fall > 0:
+            return await get_cords_and_color(cur_template, times_to_fall-1)
+        exit()
