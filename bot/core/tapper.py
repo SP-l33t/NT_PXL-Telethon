@@ -59,21 +59,20 @@ class Tapper:
     async def initialize_webview_data(self, bot_name: str, short_name: str):
         if not (bot_name or short_name):
             raise InvalidSession
-        if not self._webview_data:
-            while True:
-                try:
-                    peer = await self.tg_client.get_input_entity(bot_name)
-                    bot_id = InputUser(user_id=peer.user_id, access_hash=peer.access_hash)
-                    input_bot_app = InputBotAppShortName(bot_id=bot_id, short_name=short_name)
-                    self._webview_data = {'peer': peer, 'app': input_bot_app}
-                    break
-                except FloodWaitError as fl:
-                    logger.warning(self.log_message(f"FloodWait {fl}. Waiting {fl.seconds}s"))
-                    await asyncio.sleep(fl.seconds + 3)
-                except (UnauthorizedError, AuthKeyUnregisteredError):
-                    raise InvalidSession(f"{self.session_name}: User is unauthorized")
-                except (UserDeactivatedError, UserDeactivatedBanError, PhoneNumberBannedError):
-                    raise InvalidSession(f"{self.session_name}: User is banned")
+        while True:
+            try:
+                peer = await self.tg_client.get_input_entity(bot_name)
+                bot_id = InputUser(user_id=peer.user_id, access_hash=peer.access_hash)
+                input_bot_app = InputBotAppShortName(bot_id=bot_id, short_name=short_name)
+                self._webview_data = {'peer': peer, 'app': input_bot_app}
+                break
+            except FloodWaitError as fl:
+                logger.warning(self.log_message(f"FloodWait {fl}. Waiting {fl.seconds}s"))
+                await asyncio.sleep(fl.seconds + 3)
+            except (UnauthorizedError, AuthKeyUnregisteredError):
+                raise InvalidSession(f"{self.session_name}: User is unauthorized")
+            except (UserDeactivatedError, UserDeactivatedBanError, PhoneNumberBannedError):
+                raise InvalidSession(f"{self.session_name}: User is banned")
 
     async def get_tg_web_data(self, bot_name: str, short_name: str):
         if self.proxy and not self.tg_client._proxy:
@@ -90,7 +89,7 @@ class Tapper:
                 if bot_name == "notpixel":
                     ref_id = settings.REF_ID if randint(0, 100) <= 85 else "f525256526"
                 elif bot_name == "notgames_bot":
-                    ref_id = "cmVmPTQ2NDg2OTI0Ng=="
+                    ref_id = "aWQ9bnVsbA=="
 
                 web_view = await self.tg_client(messages.RequestAppWebViewRequest(
                     **self._webview_data,
@@ -163,9 +162,8 @@ class Tapper:
             if tg_web_data is None:
                 logger.error(self.log_message(f"Invalid web_data, cannot join squad"))
             import json
-            qwe = f'{{"webAppData": "{tg_web_data}"}}'
-            r = json.loads(qwe)
-            login_req = await http_client.post(f"{API_SQUADS_ENDPOINT}/auth/login", json=r, headers=custom_headers)
+            pl = {"webAppData": tg_web_data}
+            login_req = await http_client.post(f"{API_SQUADS_ENDPOINT}/auth/login", json=pl, headers=custom_headers)
 
             login_req.raise_for_status()
 
@@ -437,7 +435,7 @@ class Tapper:
             await asyncio.sleep(uniform(1, 3))
             return resp.status == 204
         except Exception as error:
-            log_error(self.log_message(f"Unknown error upon joinig a template: {error}"))
+            log_error(self.log_message(f"Unknown error upon joining a template: {error}"))
             return False
 
 
@@ -521,12 +519,12 @@ class Tapper:
                         reward_status = await self.claim(http_client=http_client)
                         logger.info(self.log_message(f"Claim reward: <e>{reward_status}</e>"))
 
-                    # if True:
-                    #     if not await self.in_squad(http_client=http_client):
-                    #         tg_web_data = await self.get_tg_web_data(bot_name="notgames_bot", short_name="squads")
-                    #         await self.join_squad(http_client, tg_web_data)
-                    #     else:
-                    #         logger.success(self.log_message("You're already in squad"))
+                    if settings.SQUAD_ID:
+                        if not await self.in_squad(http_client=http_client):
+                            tg_web_data = await self.get_tg_web_data(bot_name="notgames_bot", short_name="squads")
+                            await self.join_squad(http_client, tg_web_data)
+                        else:
+                            logger.success(self.log_message("You're already in squad"))
 
                     if settings.AUTO_TASK:
                         logger.info(self.log_message(f"Auto task started"))

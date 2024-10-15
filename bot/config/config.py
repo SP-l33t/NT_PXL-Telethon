@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     GLOBAL_CONFIG_PATH: str = "TG_FARM"
 
     REF_ID: str = "f525256526"
+    SQUAD_ID: str = None
 
     SLEEP_TIME: list[int] = [2700, 4200]
     AUTO_TASK: bool = True
