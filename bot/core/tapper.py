@@ -520,7 +520,7 @@ class Tapper:
                             logger.success(self.log_message("Successfully joined template"))
                         while not joined:
                             if not result:
-                                result = await self.join_template(http_client, "799818229")
+                                result = await self.join_template(http_client, self.template_to_join)
                             joined = await self.need_join_template(http_client=http_client)
                             delay = uniform(5, 10)
                             await asyncio.sleep(delay=delay)
