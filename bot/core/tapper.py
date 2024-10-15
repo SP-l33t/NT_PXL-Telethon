@@ -1,6 +1,7 @@
 import aiohttp
 import asyncio
 import os
+import json
 from urllib.parse import unquote, quote
 from aiocfscrape import CloudflareScraper
 from aiohttp_proxy import ProxyConnector
@@ -106,12 +107,15 @@ class Tapper:
 
                 start_param = re.findall(r'start_param=([^&]+)', tg_web_data)
 
+                user = re.findall(r'user=([^&]+)', tg_web_data)[0]
+                self.user_id = json.loads(user)['id']
+
                 init_data = {
                     'auth_date': re.findall(r'auth_date=([^&]+)', tg_web_data)[0],
                     'chat_instance': re.findall(r'chat_instance=([^&]+)', tg_web_data)[0],
                     'chat_type': re.findall(r'chat_type=([^&]+)', tg_web_data)[0],
                     'hash': re.findall(r'hash=([^&]+)', tg_web_data)[0],
-                    'user': quote(re.findall(r'user=([^&]+)', tg_web_data)[0]),
+                    'user': quote(user),
                 }
 
                 if start_param:
